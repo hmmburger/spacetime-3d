@@ -1302,7 +1302,15 @@ class SpaceGame3D {
 
                 // Clamp pitch (up/down) to prevent flipping
                 this.mouse.y = Math.max(-1.5, Math.min(1.5, this.mouse.y));
-                // Don't clamp x - unlimited yaw rotation!
+
+                // Keep yaw bounded to reasonable range for smooth rotation
+                // Wrap around to prevent overflow
+                if (this.mouse.x > Math.PI) {
+                    this.mouse.x -= Math.PI * 2;
+                }
+                if (this.mouse.x < -Math.PI) {
+                    this.mouse.x += Math.PI * 2;
+                }
             } else {
                 this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
                 this.mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
@@ -1408,13 +1416,11 @@ class SpaceGame3D {
             this.speed = Math.max(this.speed - this.acceleration * 2, this.minSpeed);
         }
 
-        // Mouse controls ship direction (pitch and yaw) - IMPROVED!
-        const targetPitch = -this.mouse.y * 1.8;
-        const targetYaw = -this.mouse.x * 2.2;
-
-        // Smooth rotation - more responsive now!
-        this.shipRotation.x += (targetPitch - this.shipRotation.x) * 0.13;
-        this.shipRotation.y += (targetYaw - this.shipRotation.y) * 0.13;
+        // Mouse controls ship direction (pitch and yaw)
+        // Clamp pitch to prevent flipping
+        this.shipRotation.x = Math.max(-1.5, Math.min(1.5, -this.mouse.y * 1.8));
+        // Yaw follows mouse directly
+        this.shipRotation.y = -this.mouse.x * 2.2;
 
         // Q/E for rolling (smoother and faster)
         if (this.keys['KeyQ']) {
