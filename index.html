@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPACETIME 3D - Time-Traveling Space Shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            background: #000;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 18px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #hud div {
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+
+        #health-bar-container {
+            width: 250px;
+            height: 25px;
+            border: 3px solid #00ffff;
+            background: rgba(0, 20, 40, 0.8);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00);
+            transition: width 0.3s;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        #shield-bar-container {
+            width: 250px;
+            height: 15px;
+            border: 2px solid #0088ff;
+            background: rgba(0, 20, 40, 0.8);
+            margin-top: 5px;
+            box-shadow: 0 0 15px rgba(0, 136, 255, 0.3);
+        }
+
+        #shield-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #0044ff, #00aaff);
+            transition: width 0.3s;
+        }
+
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 2px solid rgba(0, 255, 255, 0.9);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 255, 255, 0.9);
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 10px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #crosshair::after {
+            width: 10px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #cockpit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .wing {
+            position: absolute;
+            bottom: 0;
+            width: 320px;
+            height: 300px;
+            background:
+                linear-gradient(135deg,
+                    rgba(40, 45, 55, 0.98) 0%,
+                    rgba(25, 30, 40, 0.98) 50%,
+                    rgba(15, 18, 25, 0.98) 100%
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 255, 255, 0.04) 2px,
+                    rgba(0, 255, 255, 0.04) 4px
+                );
+            border: 5px solid #666;
+            border-radius: 8px;
+            box-shadow:
+                inset 0 0 100px rgba(0, 255, 255, 0.2),
+                inset 0 0 30px rgba(0, 200, 255, 0.4),
+                0 0 60px rgba(0, 150, 255, 0.4),
+                0 0 120px rgba(0, 100, 255, 0.3);
+            backdrop-filter: blur(8px);
+        }
+
+        .wing-left {
+            left: 0;
+            clip-path: polygon(
+                100% 3%,
+                100% 55%,
+                85% 100%,
+                0 100%,
+                12% 65%,
+                8% 25%
+            );
+        }
+
+        .wing-right {
+            right: 0;
+            clip-path: polygon(
+                0 3%,
+                0 55%,
+                15% 100%,
+                100% 100%,
+                88% 65%,
+                92% 25%
+            );
+        }
+
+        .cockpit-details {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 51;
+        }
+
+        .engine-glow {
+            position: absolute;
+            bottom: 20px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 255, 255, 0.9) 0%, rgba(0, 200, 255, 0.5) 40%, transparent 70%);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .engine-left {
+            left: 15px;
+        }
+
+        .engine-right {
+            right: 15px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(0, 20, 40, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            color: #00ffff;
+        }
+
+        #start-screen h1 {
+            font-size: 82px;
+            text-shadow: 0 0 40px #00ffff, 0 0 80px #00ffff, 0 0 120px #0088ff;
+            margin-bottom: 20px;
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { opacity: 1; text-shadow: 0 0 40px #00ffff, 0 0 80px #00ffff; }
+            50% { opacity: 0.85; text-shadow: 0 0 60px #00ffff, 0 0 100px #00ffff, 0 0 140px #00aaff; }
+        }
+
+        #start-screen p {
+            font-size: 28px;
+            margin-bottom: 50px;
+            text-shadow: 0 0 20px #00ffff;
+        }
+
+        #start-btn {
+            padding: 25px 80px;
+            font-size: 32px;
+            background: transparent;
+            border: 4px solid #00ffff;
+            color: #00ffff;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 15px #00ffff;
+            transition: all 0.3s;
+            pointer-events: auto;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+
+        #start-btn:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 50px #00ffff, 0 0 80px rgba(0, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        #minimap {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 180px;
+            height: 180px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 3px solid #00ffff;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .enemy-marker {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #ff0000;
+            border-radius: 50%;
+            border: 2px solid #ff0000;
+            box-shadow: 0 0 10px #ff0000;
+            pointer-events: none;
+            z-index: 101;
+            transform: translate(-50%, -50%);
+        }
+
+        .enemy-marker::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 1s infinite;
+        }
+
+        .menu-buttons {
+            display: flex;
+            gap: 20px;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #shop-btn {
+            padding: 20px 60px;
+            font-size: 28px;
+            background: transparent;
+            border: 4px solid #ffd700;
+            color: #ffd700;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 15px #ffd700;
+            transition: all 0.3s;
+            pointer-events: auto;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+
+        #shop-btn:hover {
+            background: rgba(255, 215, 0, 0.2);
+            box-shadow: 0 0 50px #ffd700, 0 0 80px rgba(255, 215, 0, 0.5);
+            transform: scale(1.1);
+        }
+
+        .controls-info {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 18px;
+            opacity: 0.9;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .controls-info p {
+            margin: 12px 0;
+        }
+
+        #ship-shop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(0, 20, 40, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            color: #00ffff;
+            overflow-y: auto;
+            padding: 40px 20px;
+        }
+
+        #ship-shop h1 {
+            font-size: 48px;
+            text-shadow: 0 0 40px #00ffff, 0 0 80px #00ffff;
+            margin-bottom: 30px;
+        }
+
+        #shop-points {
+            font-size: 32px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 20px #ffd700;
+            color: #ffd700;
+        }
+
+        .ships-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            max-width: 1400px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .ship-card {
+            background: rgba(0, 40, 80, 0.8);
+            border: 3px solid #00ffff;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+
+        .ship-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.6);
+        }
+
+        .ship-card.locked {
+            opacity: 0.7;
+            border-color: #666;
+        }
+
+        .ship-card.selected {
+            border-color: #ffd700;
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+        }
+
+        .ship-card h3 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px currentColor;
+        }
+
+        .ship-card p {
+            font-size: 14px;
+            margin-bottom: 15px;
+            opacity: 0.9;
+        }
+
+        .ship-stats {
+            margin: 20px 0;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+
+        .ship-price {
+            font-size: 32px;
+            color: #ffd700;
+            margin: 20px 0;
+            text-shadow: 0 0 20px #ffd700;
+        }
+
+        .buy-btn, .select-btn {
+            padding: 15px 30px;
+            font-size: 20px;
+            background: transparent;
+            border: 3px solid #00ffff;
+            color: #00ffff;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+
+        .buy-btn:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 30px #00ffff;
+        }
+
+        .buy-btn:disabled {
+            border-color: #666;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .select-btn:hover {
+            background: rgba(255, 215, 0, 0.3);
+            border-color: #ffd700;
+            color: #ffd700;
+            box-shadow: 0 0 30px #ffd700;
+        }
+
+        .back-btn {
+            margin-top: 40px;
+            padding: 20px 60px;
+            font-size: 28px;
+            background: transparent;
+            border: 4px solid #ff4444;
+            color: #ff4444;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 68, 68, 0.3);
+            box-shadow: 0 0 40px #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="hud">
+            <div>WAVE: <span id="wave">1</span></div>
+            <div>ERA: <span id="era">2024</span></div>
+            <div>SCORE: <span id="score">0</span></div>
+            <div>SPEED: <span id="speed">0</span></div>
+            <div id="health-bar-container">
+                <div id="health-bar"></div>
+            </div>
+            <div id="shield-bar-container">
+                <div id="shield-bar"></div>
+            </div>
+        </div>
+
+        <div id="crosshair"></div>
+
+        <div id="minimap">
+            <canvas id="minimap-canvas"></canvas>
+        </div>
+
+        <div id="cockpit-overlay">
+            <div class="wing wing-left"></div>
+            <div class="wing wing-right"></div>
+            <div class="cockpit-details">
+                <div class="engine-glow engine-left"></div>
+                <div class="engine-glow engine-right"></div>
+            </div>
+        </div>
+
+        <div id="start-screen">
+            <h1>🚀 SPACETIME 3D</h1>
+            <p>Time-Traveling Space Shooter</p>
+            <div class="menu-buttons">
+                <button id="start-btn">START MISSION</button>
+                <button id="shop-btn">🛒 SHIP SHOP</button>
+            </div>
+            <div class="controls-info">
+                <p><strong>MOUSE</strong> - Steer Ship | <strong>CLICK</strong> - Shoot</p>
+                <p><strong>W</strong> - Speed Up | <strong>S</strong> - Slow Down</p>
+                <p><strong>Q/E</strong> - Roll Ship Left/Right</p>
+            </div>
+        </div>
+
+        <div id="ship-shop">
+            <h1>🚀 SHIP SHOP</h1>
+            <div id="shop-points">TOTAL POINTS: <span id="total-points">0</span></div>
+            <div class="ships-grid" id="ships-grid"></div>
+            <button class="back-btn" id="shop-back-btn">← BACK TO MENU</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

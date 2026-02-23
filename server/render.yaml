@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: spacetime-3d-server
+    runtime: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && node server.js
+    env: node
+    plan: free
