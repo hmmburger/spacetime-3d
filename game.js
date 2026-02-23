@@ -477,15 +477,28 @@ class SpaceGame3D {
     startMultiplayerGame(playersData) {
         document.getElementById('start-screen').style.display = 'none';
         this.gameState = 'playing';
+        this.multiplayer = true;
         this.thirdPerson = true;
 
-        // Create your ship
+        // Create your ship at a random position
         this.createShip();
+        this.ship.position.set(
+            (Math.random() - 0.5) * 200,
+            (Math.random() - 0.5) * 100,
+            0
+        );
 
-        // Create other players' ships
-        playersData.forEach(playerData => {
+        // Create other players' ships at different positions
+        playersData.forEach((playerData, index) => {
             if (playerData.id !== this.playerId) {
+                // Give each player a unique spawn position
+                playerData.position = {
+                    x: (Math.random() - 0.5) * 400,
+                    y: (Math.random() - 0.5) * 200,
+                    z: (Math.random() - 0.5) * 200
+                };
                 this.createOtherPlayerShip(playerData);
+                console.log('Created other player:', playerData.name, 'at', playerData.position);
             }
         });
 
@@ -497,7 +510,7 @@ class SpaceGame3D {
             this.createEnemy();
         }
 
-        console.log('Multiplayer game started!');
+        console.log('Multiplayer game started with', playersData.length, 'players!');
     }
 
     createOtherPlayerShip(playerData) {
@@ -551,6 +564,7 @@ class SpaceGame3D {
         sprite.scale.set(10, 2.5, 1);
         ship.add(sprite);
 
+        // Set position
         ship.position.set(
             playerData.position?.x || 0,
             playerData.position?.y || 0,
@@ -559,6 +573,8 @@ class SpaceGame3D {
 
         this.scene.add(ship);
         this.otherPlayers.set(playerData.id, ship);
+
+        console.log('✅ Added player ship to scene:', playerData.name, ship.position);
     }
 
     updateOtherPlayer(data) {
@@ -1280,13 +1296,13 @@ class SpaceGame3D {
         document.addEventListener('mousemove', (e) => {
             // Use pointer lock movement if available, otherwise use normal mouse position
             if (document.pointerLockElement) {
-                // Accumulate mouse movement for unlimited rotation - BETTER SENSITIVITY!
+                // Accumulate mouse movement for unlimited rotation
                 this.mouse.x += e.movementX * 0.003;
                 this.mouse.y += e.movementY * 0.003;
 
-                // Clamp pitch (up/down) but allow unlimited yaw (left/right)
-                this.mouse.y = Math.max(-1, Math.min(1, this.mouse.y));
-                // Don't clamp x - let it rotate freely!
+                // Clamp pitch (up/down) to prevent flipping
+                this.mouse.y = Math.max(-1.5, Math.min(1.5, this.mouse.y));
+                // Don't clamp x - unlimited yaw rotation!
             } else {
                 this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
                 this.mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
