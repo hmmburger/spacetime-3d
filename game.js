@@ -429,11 +429,21 @@ class SpaceGame3D {
             return;
         }
 
+        // Convert color number to hex string
+        let colorHex = '00ffff';
+        if (player.color) {
+            if (typeof player.color === 'number') {
+                colorHex = player.color.toString(16).padStart(6, '0');
+            } else {
+                colorHex = player.color;
+            }
+        }
+
         const playerDiv = document.createElement('div');
         playerDiv.id = 'player-' + player.id;
         playerDiv.style.cssText = `
             background: rgba(0, 40, 80, 0.8);
-            border: 3px solid #${player.color ? player.color.toString(16).padStart(6, '0') : '00ffff'};
+            border: 3px solid #${colorHex};
             border-radius: 10px;
             padding: 15px 25px;
             text-align: center;
@@ -445,7 +455,7 @@ class SpaceGame3D {
         `;
 
         container.appendChild(playerDiv);
-        console.log('Added player to lobby:', player.name);
+        console.log('Added player to lobby:', player.name, 'with color:', colorHex);
     }
 
     removePlayerFromLobby(playerId) {
