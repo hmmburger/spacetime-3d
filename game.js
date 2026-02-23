@@ -204,13 +204,19 @@ class SpaceGame3D {
     // ==================== MULTIPLAYER METHODS ====================
 
     connectToServer() {
-        console.log('Connecting to server:', this.serverUrl);
+        console.log('🔌 Connecting to server:', this.serverUrl);
 
-        this.socket = io(this.serverUrl);
+        this.socket = io(this.serverUrl, {
+            transports: ['websocket', 'polling']
+        });
 
         this.socket.on('connect', () => {
             console.log('✅ Connected to server! ID:', this.socket.id);
             this.playerId = this.socket.id;
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Connection error:', error);
         });
 
         this.socket.on('disconnect', () => {
@@ -1343,25 +1349,51 @@ class SpaceGame3D {
         });
 
         document.getElementById('create-lobby-btn').addEventListener('click', () => {
+            console.log('Create lobby button clicked');
             if (!this.socket) {
+                console.log('No socket, connecting first...');
                 this.connectToServer();
-                setTimeout(() => this.createLobby(), 500);
-            } else {
+                setTimeout(() => {
+                    console.log('Creating lobby...');
+                    this.createLobby();
+                }, 1000);
+            } else if (this.socket.connected) {
+                console.log('Socket connected, creating lobby...');
                 this.createLobby();
+            } else {
+                console.log('Socket not ready, waiting for connection...');
+                this.socket.on('connect', () => {
+                    console.log('Connected! Creating lobby...');
+                    this.createLobby();
+                });
             }
         });
 
         document.getElementById('join-lobby-btn').addEventListener('click', () => {
-            const code = document.getElementById('lobby-code-input').value.trim();
-            if (code.length === 6) {
-                if (!this.socket) {
-                    this.connectToServer();
-                    setTimeout(() => this.joinLobby(code), 500);
-                } else {
-                    this.joinLobby(code);
-                }
-            } else {
+            const code = document.getElementById('lobby-code-input').value.trim().toUpperCase();
+            console.log('Attempting to join lobby with code:', code);
+
+            if (code.length !== 6) {
                 alert('Please enter a valid 6-character lobby code!');
+                return;
+            }
+
+            if (!this.socket) {
+                console.log('No socket connection, connecting now...');
+                this.connectToServer();
+                setTimeout(() => {
+                    console.log('Socket connected, joining lobby...');
+                    this.joinLobby(code);
+                }, 1000);
+            } else if (this.socket.connected) {
+                console.log('Socket already connected, joining lobby...');
+                this.joinLobby(code);
+            } else {
+                console.log('Socket not connected yet, waiting...');
+                this.socket.on('connect', () => {
+                    console.log('Socket connected, joining lobby...');
+                    this.joinLobby(code);
+                });
             }
         });
 
