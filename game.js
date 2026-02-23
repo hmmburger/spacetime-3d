@@ -1303,19 +1303,20 @@ class SpaceGame3D {
             // Use pointer lock movement if available, otherwise use normal mouse position
             if (document.pointerLockElement) {
                 // Accumulate mouse movement for unlimited rotation
-                this.mouse.x += e.movementX * 0.003;
-                this.mouse.y += e.movementY * 0.003;
+                // Better sensitivity for smooth control
+                this.mouse.x += e.movementX * 0.002;
+                this.mouse.y += e.movementY * 0.002;
 
                 // Clamp pitch (up/down) to prevent flipping
                 this.mouse.y = Math.max(-1.5, Math.min(1.5, this.mouse.y));
 
                 // Keep yaw bounded to reasonable range for smooth rotation
                 // Wrap around to prevent overflow
-                if (this.mouse.x > Math.PI) {
-                    this.mouse.x -= Math.PI * 2;
+                if (this.mouse.x > Math.PI * 2) {
+                    this.mouse.x -= Math.PI * 4;
                 }
-                if (this.mouse.x < -Math.PI) {
-                    this.mouse.x += Math.PI * 2;
+                if (this.mouse.x < -Math.PI * 2) {
+                    this.mouse.x += Math.PI * 4;
                 }
             } else {
                 this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -1449,10 +1450,14 @@ class SpaceGame3D {
         }
 
         // Mouse controls ship direction (pitch and yaw)
-        // Clamp pitch to prevent flipping
-        this.shipRotation.x = Math.max(-1.5, Math.min(1.5, -this.mouse.y * 1.8));
-        // Yaw follows mouse directly
-        this.shipRotation.y = -this.mouse.x * 2.2;
+        // Calculate target rotation
+        const targetPitch = Math.max(-1.5, Math.min(1.5, -this.mouse.y * 1.8));
+        const targetYaw = -this.mouse.x * 2.2;
+
+        // Smooth rotation - much better feel!
+        const smoothFactor = 0.15;
+        this.shipRotation.x += (targetPitch - this.shipRotation.x) * smoothFactor;
+        this.shipRotation.y += (targetYaw - this.shipRotation.y) * smoothFactor;
 
         // Q/E for rolling (smoother and faster)
         if (this.keys['KeyQ']) {
