@@ -222,14 +222,16 @@ class SpaceGame3D {
             console.log('Lobby created:', data.code);
             this.lobbyCode = data.code;
             this.isHost = data.isHost;
-            this.showLobby();
+            this.showLobby([]);
         });
 
         this.socket.on('lobbyJoined', (data) => {
             console.log('Joined lobby:', data);
             this.lobbyCode = data.code;
             this.isHost = data.isHost;
-            this.showLobby();
+            // Add existing players (excluding yourself)
+            const existingPlayers = data.players.filter(p => p.id !== this.playerId);
+            this.showLobby(existingPlayers);
         });
 
         this.socket.on('lobbyError', (message) => {
@@ -252,8 +254,12 @@ class SpaceGame3D {
 
         this.socket.on('allReady', () => {
             if (this.isHost) {
-                document.getElementById('start-btn').textContent = 'START GAME NOW!';
-                document.getElementById('start-btn').style.background = 'rgba(0, 255, 0, 0.3)';
+                const startBtn = document.getElementById('lobby-start-btn');
+                if (startBtn) {
+                    startBtn.style.display = 'block';
+                    startBtn.textContent = 'START GAME NOW!';
+                    startBtn.style.background = 'rgba(0, 255, 0, 0.3)';
+                }
             }
         });
 
@@ -311,7 +317,7 @@ class SpaceGame3D {
         });
     }
 
-    showLobby() {
+    showLobby(existingPlayers = []) {
         // Hide start screen, show lobby
         document.getElementById('start-screen').style.display = 'none';
 
@@ -358,8 +364,8 @@ class SpaceGame3D {
                     cursor: pointer;
                     font-family: 'Courier New', monospace;
                     text-shadow: 0 0 15px #ffd700;
-                    display: none;
-                "${this.isHost ? '' : 'display: none;'}>START GAME</button>
+                    ${this.isHost ? '' : 'display: none;'}
+                ">START GAME</button>
                 <button id="lobby-leave-btn" style="
                     padding: 15px 40px;
                     font-size: 20px;
@@ -390,11 +396,17 @@ class SpaceGame3D {
             location.reload();
         });
 
+        // Add existing players first
+        existingPlayers.forEach(player => {
+            this.addPlayerToLobby(player);
+        });
+
         // Add yourself to lobby
         this.addPlayerToLobby({
             id: this.playerId,
             name: this.playerName + ' (You)',
             ship: this.currentShip,
+            color: this.ships[this.currentShip].color,
             ready: false
         });
     }
@@ -406,7 +418,16 @@ class SpaceGame3D {
 
     addPlayerToLobby(player) {
         const container = document.getElementById('lobby-players');
-        if (!container) return;
+        if (!container) {
+            console.error('No lobby-players container found!');
+            return;
+        }
+
+        // Check if player already exists
+        if (document.getElementById('player-' + player.id)) {
+            console.log('Player', player.id, 'already in lobby');
+            return;
+        }
 
         const playerDiv = document.createElement('div');
         playerDiv.id = 'player-' + player.id;
@@ -424,6 +445,7 @@ class SpaceGame3D {
         `;
 
         container.appendChild(playerDiv);
+        console.log('Added player to lobby:', player.name);
     }
 
     removePlayerFromLobby(playerId) {
