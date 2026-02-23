@@ -245,8 +245,11 @@ class SpaceGame3D {
         });
 
         this.socket.on('playerJoined', (player) => {
-            console.log('Player joined:', player.name);
-            this.addPlayerToLobby(player);
+            console.log('Player joined event:', player.name, player.id);
+            // Small delay to ensure lobby DOM is ready
+            setTimeout(() => {
+                this.addPlayerToLobby(player);
+            }, 100);
         });
 
         this.socket.on('playerLeft', (playerId) => {
@@ -423,45 +426,57 @@ class SpaceGame3D {
     }
 
     addPlayerToLobby(player) {
-        const container = document.getElementById('lobby-players');
-        if (!container) {
-            console.error('No lobby-players container found!');
-            return;
-        }
+        // Try multiple times in case DOM isn't ready
+        let attempts = 0;
+        const maxAttempts = 10;
 
-        // Check if player already exists
-        if (document.getElementById('player-' + player.id)) {
-            console.log('Player', player.id, 'already in lobby');
-            return;
-        }
-
-        // Convert color number to hex string
-        let colorHex = '00ffff';
-        if (player.color) {
-            if (typeof player.color === 'number') {
-                colorHex = player.color.toString(16).padStart(6, '0');
-            } else {
-                colorHex = player.color;
+        const tryAddPlayer = () => {
+            const container = document.getElementById('lobby-players');
+            if (!container) {
+                console.error('No lobby-players container found! Attempt:', attempts + 1);
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(tryAddPlayer, 50);
+                }
+                return;
             }
-        }
 
-        const playerDiv = document.createElement('div');
-        playerDiv.id = 'player-' + player.id;
-        playerDiv.style.cssText = `
-            background: rgba(0, 40, 80, 0.8);
-            border: 3px solid #${colorHex};
-            border-radius: 10px;
-            padding: 15px 25px;
-            text-align: center;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-        `;
-        playerDiv.innerHTML = `
-            <div style="font-size: 24px; margin-bottom: 10px;">${player.name}</div>
-            <div class="ready-status" style="font-size: 16px; color: #ff4444;">Not Ready</div>
-        `;
+            // Check if player already exists
+            if (document.getElementById('player-' + player.id)) {
+                console.log('Player', player.id, 'already in lobby');
+                return;
+            }
 
-        container.appendChild(playerDiv);
-        console.log('Added player to lobby:', player.name, 'with color:', colorHex);
+            // Convert color number to hex string
+            let colorHex = '00ffff';
+            if (player.color) {
+                if (typeof player.color === 'number') {
+                    colorHex = player.color.toString(16).padStart(6, '0');
+                } else {
+                    colorHex = player.color;
+                }
+            }
+
+            const playerDiv = document.createElement('div');
+            playerDiv.id = 'player-' + player.id;
+            playerDiv.style.cssText = `
+                background: rgba(0, 40, 80, 0.8);
+                border: 3px solid #${colorHex};
+                border-radius: 10px;
+                padding: 15px 25px;
+                text-align: center;
+                box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            `;
+            playerDiv.innerHTML = `
+                <div style="font-size: 24px; margin-bottom: 10px;">${player.name}</div>
+                <div class="ready-status" style="font-size: 16px; color: #ff4444;">Not Ready</div>
+            `;
+
+            container.appendChild(playerDiv);
+            console.log('✅ Added player to lobby:', player.name, 'with color:', colorHex);
+        };
+
+        tryAddPlayer();
     }
 
     removePlayerFromLobby(playerId) {
