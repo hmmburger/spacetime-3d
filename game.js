@@ -57,6 +57,16 @@ class SpaceGame3D {
             this.minimapCanvas.height = 180;
         }
 
+        // MULTIPLAYER
+        this.serverUrl = 'https://spacetime-3d.onrender.com';
+        this.socket = null;
+        this.playerId = null;
+        this.lobbyCode = null;
+        this.isHost = false;
+        this.otherPlayers = new Map(); // Other players' ships
+        this.multiplayer = false; // Single player by default
+        this.playerName = 'Pilot' + Math.floor(Math.random() * 9999);
+
         try {
             this.init();
             this.setupEventListeners();
@@ -190,6 +200,419 @@ class SpaceGame3D {
         const current = this.getTotalScore();
         localStorage.setItem('spacetime3d_score', (current + score).toString());
     }
+
+    // ==================== MULTIPLAYER METHODS ====================
+
+    connectToServer() {
+        console.log('Connecting to server:', this.serverUrl);
+
+        this.socket = io(this.serverUrl);
+
+        this.socket.on('connect', () => {
+            console.log('✅ Connected to server! ID:', this.socket.id);
+            this.playerId = this.socket.id;
+        });
+
+        this.socket.on('disconnect', () => {
+            console.log('❌ Disconnected from server');
+        });
+
+        // Lobby events
+        this.socket.on('lobbyCreated', (data) => {
+            console.log('Lobby created:', data.code);
+            this.lobbyCode = data.code;
+            this.isHost = data.isHost;
+            this.showLobby();
+        });
+
+        this.socket.on('lobbyJoined', (data) => {
+            console.log('Joined lobby:', data);
+            this.lobbyCode = data.code;
+            this.isHost = data.isHost;
+            this.showLobby();
+        });
+
+        this.socket.on('lobbyError', (message) => {
+            alert('Error: ' + message);
+        });
+
+        this.socket.on('playerJoined', (player) => {
+            console.log('Player joined:', player.name);
+            this.addPlayerToLobby(player);
+        });
+
+        this.socket.on('playerLeft', (playerId) => {
+            console.log('Player left');
+            this.removePlayerFromLobby(playerId);
+        });
+
+        this.socket.on('playerReady', (data) => {
+            this.updatePlayerReady(data.playerId, data.ready);
+        });
+
+        this.socket.on('allReady', () => {
+            if (this.isHost) {
+                document.getElementById('start-btn').textContent = 'START GAME NOW!';
+                document.getElementById('start-btn').style.background = 'rgba(0, 255, 0, 0.3)';
+            }
+        });
+
+        this.socket.on('gameStarting', (data) => {
+            console.log('Game starting with players:', data.players);
+            this.multiplayer = true;
+            this.hideLobby();
+            this.startMultiplayerGame(data.players);
+        });
+
+        // Game events
+        this.socket.on('playerMoved', (data) => {
+            this.updateOtherPlayer(data);
+        });
+
+        this.socket.on('playerShot', (data) => {
+            this.createOtherPlayerBullets(data);
+        });
+
+        this.socket.on('playerDamaged', (data) => {
+            this.showPlayerDamage(data);
+        });
+
+        this.socket.on('playerDied', (data) => {
+            this.handlePlayerDeath(data);
+        });
+
+        this.socket.on('playerRespawned', (data) => {
+            this.respawnPlayer(data);
+        });
+
+        this.socket.on('scoreUpdate', (data) => {
+            this.updatePlayerScore(data);
+        });
+    }
+
+    createLobby() {
+        const shipData = this.ships[this.currentShip];
+        this.socket.emit('createLobby', {
+            name: this.playerName,
+            ship: this.currentShip,
+            color: shipData.color
+        });
+    }
+
+    joinLobby(code) {
+        const shipData = this.ships[this.currentShip];
+        this.socket.emit('joinLobby', {
+            code: code.toUpperCase(),
+            playerData: {
+                name: this.playerName,
+                ship: this.currentShip,
+                color: shipData.color
+            }
+        });
+    }
+
+    showLobby() {
+        // Hide start screen, show lobby
+        document.getElementById('start-screen').style.display = 'none';
+
+        const lobbyHtml = `
+            <div id="lobby-screen" style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(ellipse at center, rgba(0, 20, 40, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 200;
+                color: #00ffff;
+            ">
+                <h1 style="font-size: 64px; text-shadow: 0 0 40px #00ffff; margin-bottom: 20px;">
+                    LOBBY
+                </h1>
+                <div style="font-size: 48px; color: #ffd700; text-shadow: 0 0 30px #ffd700; margin-bottom: 30px; letter-spacing: 8px;">
+                    ${this.lobbyCode}
+                </div>
+                <p style="font-size: 20px; margin-bottom: 20px;">Share this code with friends!</p>
+                <div id="lobby-players" style="display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center;"></div>
+                <button id="lobby-ready-btn" style="
+                    padding: 20px 60px;
+                    font-size: 28px;
+                    background: transparent;
+                    border: 4px solid #00ff00;
+                    color: #00ff00;
+                    cursor: pointer;
+                    font-family: 'Courier New', monospace;
+                    text-shadow: 0 0 15px #00ff00;
+                    margin-bottom: 20px;
+                ">READY</button>
+                <button id="lobby-start-btn" style="
+                    padding: 20px 60px;
+                    font-size: 28px;
+                    background: transparent;
+                    border: 4px solid #ffd700;
+                    color: #ffd700;
+                    cursor: pointer;
+                    font-family: 'Courier New', monospace;
+                    text-shadow: 0 0 15px #ffd700;
+                    display: none;
+                "${this.isHost ? '' : 'display: none;'}>START GAME</button>
+                <button id="lobby-leave-btn" style="
+                    padding: 15px 40px;
+                    font-size: 20px;
+                    background: transparent;
+                    border: 3px solid #ff4444;
+                    color: #ff4444;
+                    cursor: pointer;
+                    font-family: 'Courier New', monospace;
+                ">LEAVE</button>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', lobbyHtml);
+
+        // Event listeners
+        document.getElementById('lobby-ready-btn').addEventListener('click', () => {
+            this.socket.emit('toggleReady');
+            document.getElementById('lobby-ready-btn').textContent = 'READY!';
+            document.getElementById('lobby-ready-btn').style.borderColor = '#ffff00';
+            document.getElementById('lobby-ready-btn').style.color = '#ffff00';
+        });
+
+        document.getElementById('lobby-start-btn').addEventListener('click', () => {
+            this.socket.emit('startGame');
+        });
+
+        document.getElementById('lobby-leave-btn').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // Add yourself to lobby
+        this.addPlayerToLobby({
+            id: this.playerId,
+            name: this.playerName + ' (You)',
+            ship: this.currentShip,
+            ready: false
+        });
+    }
+
+    hideLobby() {
+        const lobby = document.getElementById('lobby-screen');
+        if (lobby) lobby.remove();
+    }
+
+    addPlayerToLobby(player) {
+        const container = document.getElementById('lobby-players');
+        if (!container) return;
+
+        const playerDiv = document.createElement('div');
+        playerDiv.id = 'player-' + player.id;
+        playerDiv.style.cssText = `
+            background: rgba(0, 40, 80, 0.8);
+            border: 3px solid #${player.color ? player.color.toString(16).padStart(6, '0') : '00ffff'};
+            border-radius: 10px;
+            padding: 15px 25px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        `;
+        playerDiv.innerHTML = `
+            <div style="font-size: 24px; margin-bottom: 10px;">${player.name}</div>
+            <div class="ready-status" style="font-size: 16px; color: #ff4444;">Not Ready</div>
+        `;
+
+        container.appendChild(playerDiv);
+    }
+
+    removePlayerFromLobby(playerId) {
+        const playerDiv = document.getElementById('player-' + playerId);
+        if (playerDiv) playerDiv.remove();
+    }
+
+    updatePlayerReady(playerId, ready) {
+        const playerDiv = document.getElementById('player-' + playerId);
+        if (playerDiv) {
+            const status = playerDiv.querySelector('.ready-status');
+            if (status) {
+                status.textContent = ready ? 'READY!' : 'Not Ready';
+                status.style.color = ready ? '#00ff00' : '#ff4444';
+            }
+        }
+    }
+
+    startMultiplayerGame(playersData) {
+        document.getElementById('start-screen').style.display = 'none';
+        this.gameState = 'playing';
+        this.thirdPerson = true;
+
+        // Create your ship
+        this.createShip();
+
+        // Create other players' ships
+        playersData.forEach(playerData => {
+            if (playerData.id !== this.playerId) {
+                this.createOtherPlayerShip(playerData);
+            }
+        });
+
+        // Lock pointer
+        document.body.requestPointerLock();
+
+        // Spawn some enemies too
+        for (let i = 0; i < 3; i++) {
+            this.createEnemy();
+        }
+
+        console.log('Multiplayer game started!');
+    }
+
+    createOtherPlayerShip(playerData) {
+        const ship = new THREE.Group();
+        const mainColor = playerData.color || 0xcccccc;
+
+        const mainMat = new THREE.MeshStandardMaterial({
+            color: mainColor,
+            metalness: 0.9,
+            roughness: 0.3
+        });
+
+        const body = new THREE.Mesh(new THREE.ConeGeometry(2, 12, 8), mainMat);
+        body.rotation.x = Math.PI / 2;
+        ship.add(body);
+
+        const cockpit = new THREE.Mesh(
+            new THREE.SphereGeometry(1.5, 8, 8),
+            new THREE.MeshStandardMaterial({
+                color: 0x00ffff,
+                metalness: 0.5,
+                roughness: 0.1,
+                transparent: true,
+                opacity: 0.8,
+                emissive: 0x004444,
+                emissiveIntensity: 0.5
+            })
+        );
+        cockpit.position.set(0, 1.5, 1);
+        cockpit.scale.set(1, 0.6, 1.5);
+        ship.add(cockpit);
+
+        const wings = new THREE.Mesh(new THREE.BoxGeometry(12, 0.3, 4), mainMat);
+        wings.position.z = 2;
+        ship.add(wings);
+
+        // Player name tag
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 32px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(playerData.name || 'Pilot', 128, 40);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMat = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.position.y = 8;
+        sprite.scale.set(10, 2.5, 1);
+        ship.add(sprite);
+
+        ship.position.set(
+            playerData.position?.x || 0,
+            playerData.position?.y || 0,
+            playerData.position?.z || 0
+        );
+
+        this.scene.add(ship);
+        this.otherPlayers.set(playerData.id, ship);
+    }
+
+    updateOtherPlayer(data) {
+        const ship = this.otherPlayers.get(data.id);
+        if (ship && data.id !== this.playerId) {
+            // Smooth interpolation
+            ship.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), 0.3);
+            ship.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
+        }
+    }
+
+    createOtherPlayerBullets(data) {
+        const ship = this.otherPlayers.get(data.playerId);
+        if (!ship) return;
+
+        data.bullets.forEach(bulletData => {
+            const bullet = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.4, 0.4, 5, 6),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 })
+            );
+
+            bullet.position.set(bulletData.position.x, bulletData.position.y, bulletData.position.z);
+            bullet.rotation.set(bulletData.rotation.x, bulletData.rotation.y, bulletData.rotation.z);
+
+            bullet.userData = {
+                velocity: new THREE.Vector3(bulletData.velocity.x, bulletData.velocity.y, bulletData.velocity.z),
+                lifetime: 150,
+                damage: 1,
+                fromPlayerId: data.playerId
+            };
+
+            bullet.rotation.x = Math.PI / 2;
+            this.bullets.push(bullet);
+            this.scene.add(bullet);
+        });
+    }
+
+    showPlayerDamage(data) {
+        // Flash effect when player gets hit
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 150;
+            animation: damageFlash 0.2s ease-out forwards;
+        `;
+        document.body.appendChild(overlay);
+
+        setTimeout(() => overlay.remove(), 200);
+
+        // Update health
+        this.health = data.newHealth;
+        document.getElementById('health-bar').style.width = this.health + '%';
+
+        if (this.health <= 0) {
+            this.gameOver();
+        }
+    }
+
+    handlePlayerDeath(data) {
+        const ship = this.otherPlayers.get(data.playerId);
+        if (ship) {
+            this.createExplosion(ship.position.clone(), 0xff8800);
+            ship.visible = false;
+        }
+    }
+
+    respawnPlayer(data) {
+        const ship = this.otherPlayers.get(data.playerId);
+        if (ship) {
+            ship.visible = true;
+            ship.position.set(data.position.x, data.position.y, data.position.z);
+        }
+    }
+
+    updatePlayerScore(data) {
+        // Could show in a scoreboard
+        console.log('Player', data.playerId, 'score:', data.score);
+    }
+
+    // ==================== END MULTIPLAYER METHODS ====================
 
     init() {
         // Scene with deep space
@@ -680,6 +1103,8 @@ class SpaceGame3D {
         const bulletColor = shipData.color;
 
         // Create two bullets from wing tips
+        const bulletsData = []; // Store for multiplayer
+
         [-3, 3].forEach(xOffset => {
             const bullet = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.4, 0.4, 5, 6),
@@ -698,8 +1123,10 @@ class SpaceGame3D {
             bullet.position.add(forward.clone().multiplyScalar(8));
             bullet.position.add(rightOffset);
 
+            const velocity = forward.clone().multiplyScalar(this.speed + 4);
+
             bullet.userData = {
-                velocity: forward.multiplyScalar(this.speed + 4),
+                velocity: velocity,
                 lifetime: 150,
                 damage: this.bulletDamage
             };
@@ -708,7 +1135,31 @@ class SpaceGame3D {
             bullet.quaternion.copy(this.ship.quaternion);
             this.bullets.push(bullet);
             this.scene.add(bullet);
+
+            // Store for multiplayer
+            bulletsData.push({
+                position: {
+                    x: bullet.position.x,
+                    y: bullet.position.y,
+                    z: bullet.position.z
+                },
+                rotation: {
+                    x: bullet.rotation.x,
+                    y: bullet.rotation.y,
+                    z: bullet.rotation.z
+                },
+                velocity: {
+                    x: velocity.x,
+                    y: velocity.y,
+                    z: velocity.z
+                }
+            });
         });
+
+        // MULTIPLAYER: Send shoot event to server
+        if (this.multiplayer && this.socket) {
+            this.socket.emit('playerShoot', { bullets: bulletsData });
+        }
 
         // Reset shoot timer based on fire rate
         this.shootTimer = Math.max(5, 20 / this.fireRate);
@@ -832,7 +1283,30 @@ class SpaceGame3D {
         });
 
         document.getElementById('start-btn').addEventListener('click', () => {
-            this.startGame();
+            this.startGame(false); // Single player
+        });
+
+        document.getElementById('create-lobby-btn').addEventListener('click', () => {
+            if (!this.socket) {
+                this.connectToServer();
+                setTimeout(() => this.createLobby(), 500);
+            } else {
+                this.createLobby();
+            }
+        });
+
+        document.getElementById('join-lobby-btn').addEventListener('click', () => {
+            const code = document.getElementById('lobby-code-input').value.trim();
+            if (code.length === 6) {
+                if (!this.socket) {
+                    this.connectToServer();
+                    setTimeout(() => this.joinLobby(code), 500);
+                } else {
+                    this.joinLobby(code);
+                }
+            } else {
+                alert('Please enter a valid 6-character lobby code!');
+            }
         });
 
         document.getElementById('shop-btn').addEventListener('click', () => {
@@ -844,11 +1318,12 @@ class SpaceGame3D {
         });
     }
 
-    startGame() {
-        console.log("Starting game...");
+    startGame(multiplayer = false) {
+        console.log("Starting game..." + (multiplayer ? " MULTIPLAYER!" : " SINGLE PLAYER"));
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('ship-shop').style.display = 'none';
         this.gameState = 'playing';
+        this.multiplayer = multiplayer;
         this.thirdPerson = true;
 
         // Create the player's ship
@@ -951,6 +1426,28 @@ class SpaceGame3D {
         // Update player light position
         if (this.playerLight) {
             this.playerLight.position.copy(this.ship.position);
+        }
+
+        // MULTIPLAYER: Send position to server
+        if (this.multiplayer && this.socket && this.ship) {
+            this.socket.emit('playerUpdate', {
+                position: {
+                    x: this.ship.position.x,
+                    y: this.ship.position.y,
+                    z: this.ship.position.z
+                },
+                rotation: {
+                    x: this.ship.rotation.x,
+                    y: this.ship.rotation.y,
+                    z: this.ship.rotation.z
+                },
+                velocity: {
+                    x: this.velocity.x,
+                    y: this.velocity.y,
+                    z: this.velocity.z
+                },
+                speed: this.speed
+            });
         }
 
         // Animate space dust for sense of speed

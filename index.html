@@ -524,7 +524,23 @@
             <h1>🚀 SPACETIME 3D</h1>
             <p>Time-Traveling Space Shooter</p>
             <div class="menu-buttons">
-                <button id="start-btn">START MISSION</button>
+                <button id="start-btn">🎮 SINGLE PLAYER</button>
+                <button id="create-lobby-btn">🌐 CREATE LOBBY</button>
+                <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+                    <input type="text" id="lobby-code-input" placeholder="Enter Code" maxlength="6" style="
+                        padding: 20px;
+                        font-size: 28px;
+                        background: rgba(0, 20, 40, 0.9);
+                        border: 4px solid #00ffff;
+                        color: #00ffff;
+                        font-family: 'Courier New', monospace;
+                        text-align: center;
+                        text-transform: uppercase;
+                        width: 200px;
+                        text-shadow: 0 0 10px #00ffff;
+                    ">
+                    <button id="join-lobby-btn">JOIN</button>
+                </div>
                 <button id="shop-btn">🛒 SHIP SHOP</button>
             </div>
             <div class="controls-info">
@@ -543,6 +559,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
